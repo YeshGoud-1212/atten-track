@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { ArrowLeft, AlertTriangle, Target, TrendingUp, Calendar, Plus, Minus, Settings } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Target, TrendingUp, Calendar, Plus, Minus, Settings, BookOpen, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import AttendanceChart from '@/components/AttendanceChart';
 import FloatingShapes from '@/components/FloatingShapes';
 import { format } from 'date-fns';
@@ -70,8 +72,30 @@ const Dashboard = () => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [showAddHoliday, setShowAddHoliday] = useState(false);
   const [showRemoveHoliday, setShowRemoveHoliday] = useState(false);
+  const [mustAttend, setMustAttend] = useState(student.mustAttend);
+  const [safeBunks, setSafeBunks] = useState(student.safeBunks);
+  const [showTimetable, setShowTimetable] = useState(false);
+  const [timetable, setTimetable] = useState<string[][]>(
+    Array(6).fill(null).map(() => Array(6).fill(''))
+  );
+  const [hasSetTimetable, setHasSetTimetable] = useState(false);
   
   const randomQuote = motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)];
+
+  // Recalculate stats when target changes
+  useEffect(() => {
+    const currentPercentage = (student.attended / student.total) * 100;
+    const requiredPercentage = targetPercentage;
+    const totalClassesNeeded = Math.ceil((requiredPercentage * student.total - 100 * student.attended) / (100 - requiredPercentage));
+    const newMustAttend = Math.max(0, totalClassesNeeded);
+    const newSafeBunks = Math.max(0, student.remainingClasses - newMustAttend);
+    
+    setMustAttend(newMustAttend);
+    setSafeBunks(newSafeBunks);
+  }, [targetPercentage, student]);
+
+  const timeSlots = ['9:00-10:00', '10:00-11:00', '11:00-12:00', '12:00-1:00', '2:00-3:00', '3:00-4:00'];
+  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   const getSubjectStatus = (percentage: number) => {
     if (percentage >= targetPercentage) return 'success';
@@ -102,6 +126,49 @@ const Dashboard = () => {
       setShowRemoveHoliday(false);
       setSelectedDate(undefined);
     }
+  };
+
+  const isHoliday = (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return student.holidays.includes(dateStr);
+  };
+
+  const handleTimetableChange = (dayIndex: number, slotIndex: number, value: string) => {
+    const newTimetable = [...timetable];
+    newTimetable[dayIndex][slotIndex] = value;
+    setTimetable(newTimetable);
+  };
+
+  const saveTimetable = () => {
+    setHasSetTimetable(true);
+    setShowTimetable(false);
+    console.log('Timetable saved:', timetable);
+  };
+
+  const getSubjectWiseBunks = () => {
+    if (!hasSetTimetable) return {};
+    
+    const subjectCounts: { [key: string]: number } = {};
+    const subjectBunks: { [key: string]: number } = {};
+    
+    // Count total classes per subject from timetable
+    timetable.forEach(day => {
+      day.forEach(slot => {
+        if (slot.trim() && !slot.toLowerCase().includes('mtp') && !slot.toLowerCase().includes('sport') && !slot.toLowerCase().includes('library')) {
+          subjectCounts[slot] = (subjectCounts[slot] || 0) + 1;
+        }
+      });
+    });
+    
+    // Calculate safe bunks per subject
+    Object.keys(subjectCounts).forEach(subject => {
+      const totalClasses = subjectCounts[subject] * 4; // Assuming 4 weeks per month
+      const requiredClasses = Math.ceil((totalClasses * targetPercentage) / 100);
+      const attendedClasses = Math.floor(totalClasses * 0.8); // Assuming 80% current attendance
+      subjectBunks[subject] = Math.max(0, totalClasses - requiredClasses);
+    });
+    
+    return subjectBunks;
   };
 
   return (
@@ -139,9 +206,10 @@ const Dashboard = () => {
                       type="number"
                       value={targetPercentage}
                       onChange={(e) => setTargetPercentage(Number(e.target.value))}
-                      className="w-16 h-6 text-xs"
+                      className="w-16 h-6 text-xs bg-background/50"
                       min="0"
                       max="100"
+                      autoFocus
                     />
                     <Button
                       size="sm"
@@ -186,14 +254,14 @@ const Dashboard = () => {
                 <h3 className="text-xl font-bold">🎯 Bunk Calculator</h3>
               </div>
               
-              {student.safeBunks > 0 ? (
+              {safeBunks > 0 ? (
                 <div className="text-center">
                   <div className="text-6xl font-bold text-success neon-text animate-pulse-neon mb-2">
-                    {student.safeBunks}
+                    {safeBunks}
                   </div>
                   <p className="text-lg text-success font-semibold">Safe Bunks Left! ✅</p>
                   <p className="text-sm text-muted-foreground mt-2">
-                    You can miss {student.safeBunks} more classes and still maintain 75%
+                    You can miss {safeBunks} more classes and still maintain {targetPercentage}%
                   </p>
                 </div>
               ) : (
@@ -203,7 +271,7 @@ const Dashboard = () => {
                   </div>
                   <p className="text-lg text-destructive font-semibold">No more bunks allowed!</p>
                   <p className="text-sm text-muted-foreground mt-2">
-                    Attend all remaining classes to maintain 75%
+                    Attend all remaining classes to maintain {targetPercentage}%
                   </p>
                 </div>
               )}
@@ -218,7 +286,7 @@ const Dashboard = () => {
               
               <div className="space-y-4">
                 <p className="text-center text-lg">
-                  You must attend <span className="text-primary font-bold text-2xl neon-text">{student.mustAttend}</span> out of <span className="font-bold">{student.remainingClasses}</span> remaining classes to stay above {targetPercentage}%
+                  You must attend <span className="text-primary font-bold text-2xl neon-text">{mustAttend}</span> out of <span className="font-bold">{student.remainingClasses}</span> remaining classes to stay above {targetPercentage}%
                 </p>
                 
                 {/* Progress Bar */}
@@ -293,62 +361,175 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Holiday Management */}
-        <div className="glass-card hover-lift mb-8">
-          <h3 className="text-xl font-bold neon-text mb-4">🗓️ Holiday Management</h3>
-          <div className="flex flex-wrap gap-4">
-            <Popover open={showAddHoliday} onOpenChange={setShowAddHoliday}>
-              <PopoverTrigger asChild>
-                <Button variant="glass" className="flex items-center gap-2">
-                  <Plus className="h-4 w-4" />
-                  Add Holiday
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <CalendarComponent
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={(date) => {
-                    setSelectedDate(date);
-                    handleAddHoliday(date);
-                  }}
-                  initialFocus
-                  className="rounded-md border glass-card"
-                />
-              </PopoverContent>
-            </Popover>
+        {/* Holiday Management & Timetable */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Holiday Management */}
+          <div className="glass-card hover-lift">
+            <h3 className="text-xl font-bold neon-text mb-4">🗓️ Holiday Management</h3>
+            <div className="flex flex-wrap gap-4">
+              <Popover open={showAddHoliday} onOpenChange={setShowAddHoliday}>
+                <PopoverTrigger asChild>
+                  <Button variant="glass" className="flex items-center gap-2">
+                    <Plus className="h-4 w-4" />
+                    Add Holiday
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={(date) => {
+                      setSelectedDate(date);
+                      handleAddHoliday(date);
+                    }}
+                    initialFocus
+                    className="rounded-md border glass-card"
+                    modifiers={{
+                      holiday: (date) => isHoliday(date)
+                    }}
+                    modifiersStyles={{
+                      holiday: { backgroundColor: 'hsl(var(--destructive))', color: 'white', borderRadius: '4px' }
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
 
-            <Popover open={showRemoveHoliday} onOpenChange={setShowRemoveHoliday}>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" className="flex items-center gap-2">
-                  <Minus className="h-4 w-4" />
-                  Remove Holiday
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <CalendarComponent
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={(date) => {
-                    setSelectedDate(date);
-                    handleRemoveHoliday(date);
-                  }}
-                  initialFocus
-                  className="rounded-md border glass-card"
-                />
-              </PopoverContent>
-            </Popover>
+              <Popover open={showRemoveHoliday} onOpenChange={setShowRemoveHoliday}>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" className="flex items-center gap-2">
+                    <Minus className="h-4 w-4" />
+                    Remove Holiday
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={(date) => {
+                      setSelectedDate(date);
+                      handleRemoveHoliday(date);
+                    }}
+                    initialFocus
+                    className="rounded-md border glass-card"
+                    modifiers={{
+                      holiday: (date) => isHoliday(date)
+                    }}
+                    modifiersStyles={{
+                      holiday: { backgroundColor: 'hsl(var(--destructive))', color: 'white', borderRadius: '4px' }
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            
+            <div className="mt-4 p-3 bg-accent/10 rounded-lg">
+              <p className="text-sm text-muted-foreground">
+                📅 Current holidays: {student.holidays.length} days marked
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Default: Every 2nd and 4th Saturday are holidays
+              </p>
+            </div>
           </div>
-          
-          <div className="mt-4 p-3 bg-accent/10 rounded-lg">
-            <p className="text-sm text-muted-foreground">
-              📅 Current holidays: {student.holidays.length} days marked
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Default: Every 2nd and 4th Saturday are holidays
-            </p>
+
+          {/* Timetable Management */}
+          <div className="glass-card hover-lift">
+            <h3 className="text-xl font-bold neon-text mb-4">📚 Timetable Setup</h3>
+            <div className="space-y-4">
+              <Dialog open={showTimetable} onOpenChange={setShowTimetable}>
+                <DialogTrigger asChild>
+                  <Button variant="glass" className="flex items-center gap-2">
+                    <BookOpen className="h-4 w-4" />
+                    {hasSetTimetable ? 'Edit Timetable' : 'Add Timetable'}
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-4xl glass-card">
+                  <DialogHeader>
+                    <DialogTitle className="neon-text">📅 Weekly Timetable</DialogTitle>
+                  </DialogHeader>
+                  
+                  <Alert className="mb-4">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      <strong>Note:</strong> Do not include leisure periods like MTP, Sports, Library, etc.
+                    </AlertDescription>
+                  </Alert>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr>
+                          <th className="border border-border/20 p-2 text-sm font-bold bg-accent/10">Time</th>
+                          {days.map((day) => (
+                            <th key={day} className="border border-border/20 p-2 text-sm font-bold bg-accent/10">
+                              {day}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {timeSlots.map((slot, slotIndex) => (
+                          <tr key={slot}>
+                            <td className="border border-border/20 p-2 text-xs font-medium bg-muted/5">
+                              {slot}
+                            </td>
+                            {days.map((_, dayIndex) => (
+                              <td key={dayIndex} className="border border-border/20 p-1">
+                                <Input
+                                  value={timetable[dayIndex][slotIndex]}
+                                  onChange={(e) => handleTimetableChange(dayIndex, slotIndex, e.target.value)}
+                                  placeholder="Subject"
+                                  className="h-8 text-xs border-0 bg-background/50"
+                                />
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="flex justify-end gap-2 mt-4">
+                    <Button variant="ghost" onClick={() => setShowTimetable(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={saveTimetable} className="neon-glow">
+                      Save Timetable
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              <p className="text-sm text-muted-foreground">
+                {hasSetTimetable ? (
+                  <span className="text-success">✅ Timetable set! Subject-wise calculations available.</span>
+                ) : (
+                  'Set up your weekly timetable to calculate subject-wise attendance.'
+                )}
+              </p>
+            </div>
           </div>
         </div>
+
+        {/* Subject-wise Bunk Calculator */}
+        {hasSetTimetable && (
+          <div className="glass-card hover-lift mb-8">
+            <h3 className="text-xl font-bold neon-text mb-4">🎯 Subject-wise Bunk Calculator</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Object.entries(getSubjectWiseBunks()).map(([subject, bunks]) => (
+                <div key={subject} className="p-4 bg-gradient-to-br from-accent/10 to-primary/5 rounded-lg border border-border/20">
+                  <h4 className="font-bold text-primary mb-2">{subject}</h4>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold neon-text">
+                      {bunks}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Safe bunks</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Motivational Quote */}
         <div className="glass-card text-center hover-lift">
