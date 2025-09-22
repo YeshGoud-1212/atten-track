@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, GraduationCap } from 'lucide-react';
+import { Search, GraduationCap, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import FloatingShapes from '@/components/FloatingShapes';
 
 const Home = () => {
   const [rollNumber, setRollNumber] = useState('');
+  const [password, setPassword] = useState('');
   const navigate = useNavigate();
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -50,12 +51,24 @@ const Home = () => {
               />
             </div>
             
+            <div className="relative">
+              <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+              <Input
+                type="password"
+                placeholder="Enter Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="pl-12"
+                required
+              />
+            </div>
+            
             <Button 
               type="submit" 
               variant="neon" 
               size="xl" 
               className="w-full"
-              disabled={!rollNumber.trim()}
+              disabled={!rollNumber.trim() || !password.trim()}
             >
               Check Attendance ✨
             </Button>
