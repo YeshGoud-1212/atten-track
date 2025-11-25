@@ -65,27 +65,27 @@ const motivationalQuotes = [
 const Dashboard = () => {
   const [searchParams] = useSearchParams();
   const rollNo = searchParams.get('roll') || '23IT101';
-  const student = studentData[rollNo as keyof typeof studentData] || studentData["23IT101"];
+  const student = studentData[rollNo] || studentData["23IT101"];
   
   const [targetPercentage, setTargetPercentage] = useState(student.targetPercentage);
   const [editingTarget, setEditingTarget] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [selectedDate, setSelectedDate] = useState(undefined);
   const [showAddHoliday, setShowAddHoliday] = useState(false);
   const [showRemoveHoliday, setShowRemoveHoliday] = useState(false);
   const [mustAttend, setMustAttend] = useState(student.mustAttend);
   const [safeBunks, setSafeBunks] = useState(student.safeBunks);
   const [showTimetable, setShowTimetable] = useState(false);
-  const [timetable, setTimetable] = useState<string[][]>(
+  const [timetable, setTimetable] = useState(
     Array(6).fill(null).map(() => Array(6).fill(''))
   );
   const [hasSetTimetable, setHasSetTimetable] = useState(false);
-  const [subjectTargets, setSubjectTargets] = useState<{ [key: string]: number }>(
+  const [subjectTargets, setSubjectTargets] = useState(
     student.subjects.reduce((acc, subject) => {
       acc[subject.name] = targetPercentage;
       return acc;
-    }, {} as { [key: string]: number })
+    }, {})
   );
-  const [editingSubject, setEditingSubject] = useState<string | null>(null);
+  const [editingSubject, setEditingSubject] = useState(null);
   
   const randomQuote = motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)];
 
@@ -104,13 +104,13 @@ const Dashboard = () => {
   const timeSlots = ['9:00-10:00', '10:00-11:00', '11:00-12:00', '12:00-1:00', '2:00-3:00', '3:00-4:00'];
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-  const getSubjectStatus = (percentage: number, subjectTarget: number) => {
+  const getSubjectStatus = (percentage, subjectTarget) => {
     if (percentage >= subjectTarget) return 'success';
     if (percentage >= subjectTarget - 5) return 'warning';
     return 'destructive';
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status) => {
     switch (status) {
       case 'success': return 'hsl(var(--success))';
       case 'warning': return 'hsl(var(--warning))';
@@ -119,7 +119,7 @@ const Dashboard = () => {
     }
   };
 
-  const handleAddHoliday = (date: Date | undefined) => {
+  const handleAddHoliday = (date) => {
     if (date) {
       console.log('Adding holiday for:', format(date, 'yyyy-MM-dd'));
       setShowAddHoliday(false);
@@ -127,7 +127,7 @@ const Dashboard = () => {
     }
   };
 
-  const handleRemoveHoliday = (date: Date | undefined) => {
+  const handleRemoveHoliday = (date) => {
     if (date) {
       console.log('Removing holiday for:', format(date, 'yyyy-MM-dd'));
       setShowRemoveHoliday(false);
@@ -135,12 +135,12 @@ const Dashboard = () => {
     }
   };
 
-  const isHoliday = (date: Date) => {
+  const isHoliday = (date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     return student.holidays.includes(dateStr);
   };
 
-  const handleTimetableChange = (dayIndex: number, slotIndex: number, value: string) => {
+  const handleTimetableChange = (dayIndex, slotIndex, value) => {
     const newTimetable = [...timetable];
     newTimetable[dayIndex][slotIndex] = value;
     setTimetable(newTimetable);
@@ -155,8 +155,8 @@ const Dashboard = () => {
   const getSubjectWiseBunks = () => {
     if (!hasSetTimetable) return {};
     
-    const subjectCounts: { [key: string]: number } = {};
-    const subjectBunks: { [key: string]: number } = {};
+    const subjectCounts = {};
+    const subjectBunks = {};
     
     // Count total classes per subject from timetable
     timetable.forEach(day => {

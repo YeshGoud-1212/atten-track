@@ -1,23 +1,17 @@
-import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
-interface AttendanceChartProps {
-  attended: number;
-  total: number;
-  target?: number;
-}
+const COLORS = ['hsl(var(--success))', 'hsl(var(--destructive))'];
 
-const AttendanceChart: React.FC<AttendanceChartProps> = ({ attended, total, target = 75 }) => {
+const AttendanceChart = ({ attended, total, target }) => {
   const missed = total - attended;
+  
   const data = [
-    { name: 'Attended', value: attended, color: '#10b981' },
-    { name: 'Missed', value: missed, color: '#ef4444' },
+    { name: 'Attended', value: attended },
+    { name: 'Missed', value: missed }
   ];
 
-  const COLORS = ['hsl(var(--success))', 'hsl(var(--destructive))'];
-
   return (
-    <div className="glass-card hover-lift w-full h-80">
+    <div className="glass-card hover-lift h-full">
       <h3 className="text-xl font-bold text-center mb-4 neon-text">
         📊 Attendance Overview
       </h3>
