@@ -79,6 +79,13 @@ const Dashboard = () => {
     Array(6).fill(null).map(() => Array(6).fill(''))
   );
   const [hasSetTimetable, setHasSetTimetable] = useState(false);
+  const [subjectTargets, setSubjectTargets] = useState<{ [key: string]: number }>(
+    student.subjects.reduce((acc, subject) => {
+      acc[subject.name] = targetPercentage;
+      return acc;
+    }, {} as { [key: string]: number })
+  );
+  const [editingSubject, setEditingSubject] = useState<string | null>(null);
   
   const randomQuote = motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)];
 
@@ -97,9 +104,9 @@ const Dashboard = () => {
   const timeSlots = ['9:00-10:00', '10:00-11:00', '11:00-12:00', '12:00-1:00', '2:00-3:00', '3:00-4:00'];
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-  const getSubjectStatus = (percentage: number) => {
-    if (percentage >= targetPercentage) return 'success';
-    if (percentage >= targetPercentage - 5) return 'warning';
+  const getSubjectStatus = (percentage: number, subjectTarget: number) => {
+    if (percentage >= subjectTarget) return 'success';
+    if (percentage >= subjectTarget - 5) return 'warning';
     return 'destructive';
   };
 
@@ -160,10 +167,11 @@ const Dashboard = () => {
       });
     });
     
-    // Calculate safe bunks per subject
+    // Calculate safe bunks per subject using individual targets
     Object.keys(subjectCounts).forEach(subject => {
       const totalClasses = subjectCounts[subject] * 4; // Assuming 4 weeks per month
-      const requiredClasses = Math.ceil((totalClasses * targetPercentage) / 100);
+      const subjectTarget = subjectTargets[subject] || targetPercentage;
+      const requiredClasses = Math.ceil((totalClasses * subjectTarget) / 100);
       const attendedClasses = Math.floor(totalClasses * 0.8); // Assuming 80% current attendance
       subjectBunks[subject] = Math.max(0, totalClasses - requiredClasses);
     });
@@ -327,17 +335,61 @@ const Dashboard = () => {
           <h2 className="text-2xl font-bold neon-text mb-6">📚 Subject-wise Attendance</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {student.subjects.map((subject, index) => {
-              const status = getSubjectStatus(subject.percentage);
+              const subjectTarget = subjectTargets[subject.name] || targetPercentage;
+              const status = getSubjectStatus(subject.percentage, subjectTarget);
+              const isEditingThis = editingSubject === subject.name;
+              
               return (
                 <div key={index} className="glass-card hover-lift">
-                  <div className="flex justify-between items-center mb-3">
+                  <div className="flex justify-between items-start mb-3">
                     <h3 className="font-bold text-primary">{subject.name}</h3>
-                    <span className={`text-sm font-bold ${
-                      status === 'success' ? 'text-success' : 
-                      status === 'warning' ? 'text-warning' : 'text-destructive'
-                    }`}>
-                      {subject.percentage}%
-                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className={`text-sm font-bold ${
+                        status === 'success' ? 'text-success' : 
+                        status === 'warning' ? 'text-warning' : 'text-destructive'
+                      }`}>
+                        {subject.percentage}%
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-muted-foreground">Target:</span>
+                        {isEditingThis ? (
+                          <div className="flex items-center gap-1">
+                            <Input
+                              type="number"
+                              value={subjectTarget}
+                              onChange={(e) => setSubjectTargets({
+                                ...subjectTargets,
+                                [subject.name]: Number(e.target.value)
+                              })}
+                              className="w-12 h-5 text-xs bg-background/50 px-1"
+                              min="0"
+                              max="100"
+                              autoFocus
+                            />
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-5 w-5 p-0"
+                              onClick={() => setEditingSubject(null)}
+                            >
+                              ✓
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs font-bold text-accent">{subjectTarget}%</span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-5 w-5 p-0"
+                              onClick={() => setEditingSubject(subject.name)}
+                            >
+                              <Settings className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Progress 
