@@ -10,7 +10,7 @@ const Home = () => {
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (rollNumber.trim()) {
       navigate(`/dashboard?roll=${rollNumber.toUpperCase()}`);
