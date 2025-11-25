@@ -297,6 +297,10 @@ const Dashboard = () => {
                   You must attend <span className="text-primary font-bold text-2xl neon-text">{mustAttend}</span> out of <span className="font-bold">{student.remainingClasses}</span> remaining classes to stay above {targetPercentage}%
                 </p>
                 
+                <p className="text-xs text-muted-foreground text-center italic">
+                  Unexpected holidays may decrease your allowable bunks.
+                </p>
+                
                 {/* Progress Bar */}
                 <div className="relative">
                   <div className="w-full bg-muted rounded-full h-4 overflow-hidden">
