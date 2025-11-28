@@ -239,6 +239,7 @@ const Dashboard = () => {
                     ...classesPerDay,
                     [day]: parseInt(e.target.value) || 0
                   })}
+                  onFocus={(e) => e.target.select()}
                   placeholder="0"
                   className="h-16 text-2xl text-center font-bold"
                 />
