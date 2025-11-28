@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import AttendanceChart from '@/components/AttendanceChart';
 import FloatingShapes from '@/components/FloatingShapes';
 import { format } from 'date-fns';
@@ -93,12 +94,19 @@ const Dashboard = () => {
   });
   const [bunkClasses, setBunkClasses] = useState(0);
   const [projectedAttendance, setProjectedAttendance] = useState(null);
+  const [showScheduleSetup, setShowScheduleSetup] = useState(false);
+  const [isFirstTimeUser, setIsFirstTimeUser] = useState(false);
   
-  // Load timetable data from localStorage on mount
+  // Load timetable data from localStorage on mount and check if first-time user
   useEffect(() => {
     const savedTimetable = localStorage.getItem('classesPerDay');
     if (savedTimetable) {
       setClassesPerDay(JSON.parse(savedTimetable));
+      setIsFirstTimeUser(false);
+    } else {
+      // First-time user, show the setup dialog
+      setIsFirstTimeUser(true);
+      setShowScheduleSetup(true);
     }
   }, []);
   
@@ -121,6 +129,8 @@ const Dashboard = () => {
   // Save timetable to localStorage
   const saveClassesPerDay = () => {
     localStorage.setItem('classesPerDay', JSON.stringify(classesPerDay));
+    setShowScheduleSetup(false);
+    setIsFirstTimeUser(false);
   };
   
   // Calculate remaining classes from timetable
@@ -196,6 +206,82 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen relative p-4 md:p-8">
       <FloatingShapes />
+      
+      {/* First-Time User Schedule Setup Dialog */}
+      <Dialog open={showScheduleSetup} onOpenChange={setShowScheduleSetup}>
+        <DialogContent className="max-w-4xl glass-card max-h-[90vh] overflow-y-auto" onInteractOutside={(e) => isFirstTimeUser && e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle className="text-3xl font-bold neon-text text-center mb-2">
+              📚 Welcome! Let's Set Up Your Weekly Schedule
+            </DialogTitle>
+            <p className="text-center text-muted-foreground">
+              Enter the number of classes you have on each weekday. This helps us calculate your attendance accurately.
+            </p>
+          </DialogHeader>
+
+          <Alert className="my-4">
+            <BookOpen className="h-4 w-4" />
+            <AlertDescription>
+              💡 <strong>Tip:</strong> Count only academic classes. Exclude breaks, sports, or library periods. You can edit this anytime later!
+            </AlertDescription>
+          </Alert>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-6 my-6">
+            {days.map((day) => (
+              <div key={day} className="glass-card p-4 space-y-3 hover-lift">
+                <label className="text-lg font-bold text-primary block">{day}</label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="10"
+                  value={classesPerDay[day]}
+                  onChange={(e) => setClassesPerDay({
+                    ...classesPerDay,
+                    [day]: parseInt(e.target.value) || 0
+                  })}
+                  placeholder="0"
+                  className="h-16 text-2xl text-center font-bold"
+                />
+                <p className="text-xs text-muted-foreground text-center">classes per day</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="glass-card p-6 mb-6 bg-gradient-to-r from-primary/10 to-accent/10 border-primary/20">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-lg font-bold text-foreground">Total Classes per Week</p>
+                <p className="text-sm text-muted-foreground">Sum of all weekdays</p>
+              </div>
+              <div className="text-5xl font-bold text-primary neon-text animate-pulse-neon">
+                {calculateRemainingClasses()}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-4">
+            {!isFirstTimeUser && (
+              <Button 
+                onClick={() => setShowScheduleSetup(false)} 
+                variant="ghost"
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            )}
+            <Button 
+              onClick={saveClassesPerDay} 
+              variant="neon" 
+              size="xl"
+              className="flex-1 flex items-center gap-2"
+              disabled={calculateRemainingClasses() === 0}
+            >
+              <Save className="h-5 w-5" />
+              {isFirstTimeUser ? 'Continue to Dashboard' : 'Save Changes'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       
       <div className="max-w-6xl mx-auto animate-slide-up">
         {/* Header */}
@@ -500,58 +586,24 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* First-Time Timetable Setup */}
+        {/* Edit Schedule Button */}
         <div className="glass-card hover-lift mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <BookOpen className="h-6 w-6 text-accent" />
-            <h3 className="text-xl font-bold neon-text">📚 Weekly Class Schedule</h3>
-          </div>
-          
-          <Alert className="mb-4">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              Enter the number of classes you have on each weekday. This data will be used for attendance calculations.
-            </AlertDescription>
-          </Alert>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
-            {days.map((day) => (
-              <div key={day} className="space-y-2">
-                <label className="text-sm font-medium text-foreground">{day}</label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="10"
-                  value={classesPerDay[day]}
-                  onChange={(e) => setClassesPerDay({
-                    ...classesPerDay,
-                    [day]: parseInt(e.target.value) || 0
-                  })}
-                  placeholder="0"
-                  className="h-12"
-                />
-              </div>
-            ))}
-          </div>
-
-          <div className="flex items-center justify-between p-4 bg-primary/5 rounded-lg border border-primary/20 mb-4">
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-foreground">Total Classes per Week</p>
-              <p className="text-xs text-muted-foreground">Sum of all weekdays</p>
+              <h3 className="text-xl font-bold neon-text mb-2">📚 Weekly Class Schedule</h3>
+              <p className="text-sm text-muted-foreground">
+                Total classes per week: <span className="font-bold text-primary">{calculateRemainingClasses()}</span>
+              </p>
             </div>
-            <div className="text-3xl font-bold text-primary neon-text">
-              {calculateRemainingClasses()}
-            </div>
+            <Button 
+              onClick={() => setShowScheduleSetup(true)} 
+              variant="glass"
+              className="flex items-center gap-2"
+            >
+              <Settings className="h-4 w-4" />
+              Edit Schedule
+            </Button>
           </div>
-
-          <Button 
-            onClick={saveClassesPerDay} 
-            variant="neon" 
-            className="w-full md:w-auto flex items-center gap-2"
-          >
-            <Save className="h-4 w-4" />
-            Save Class Schedule
-          </Button>
         </div>
 
         {/* Attendance If I Bunk X Classes */}
