@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { ArrowLeft, AlertTriangle, Target, TrendingUp, Calendar, Plus, Minus, Settings, BookOpen, Clock } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Target, TrendingUp, Calendar, Plus, Minus, Settings, BookOpen, Clock, Save, Calculator } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import AttendanceChart from '@/components/AttendanceChart';
 import FloatingShapes from '@/components/FloatingShapes';
 import { format } from 'date-fns';
@@ -74,11 +74,6 @@ const Dashboard = () => {
   const [showRemoveHoliday, setShowRemoveHoliday] = useState(false);
   const [mustAttend, setMustAttend] = useState(student.mustAttend);
   const [safeBunks, setSafeBunks] = useState(student.safeBunks);
-  const [showTimetable, setShowTimetable] = useState(false);
-  const [timetable, setTimetable] = useState(
-    Array(6).fill(null).map(() => Array(6).fill(''))
-  );
-  const [hasSetTimetable, setHasSetTimetable] = useState(false);
   const [subjectTargets, setSubjectTargets] = useState(
     student.subjects.reduce((acc, subject) => {
       acc[subject.name] = targetPercentage;
@@ -86,6 +81,26 @@ const Dashboard = () => {
     }, {})
   );
   const [editingSubject, setEditingSubject] = useState(null);
+  
+  // New features state
+  const [classesPerDay, setClassesPerDay] = useState({
+    Monday: 0,
+    Tuesday: 0,
+    Wednesday: 0,
+    Thursday: 0,
+    Friday: 0,
+    Saturday: 0
+  });
+  const [bunkClasses, setBunkClasses] = useState(0);
+  const [projectedAttendance, setProjectedAttendance] = useState(null);
+  
+  // Load timetable data from localStorage on mount
+  useEffect(() => {
+    const savedTimetable = localStorage.getItem('classesPerDay');
+    if (savedTimetable) {
+      setClassesPerDay(JSON.parse(savedTimetable));
+    }
+  }, []);
   
   const randomQuote = motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)];
 
@@ -101,8 +116,45 @@ const Dashboard = () => {
     setSafeBunks(newSafeBunks);
   }, [targetPercentage, student]);
 
-  const timeSlots = ['9:00-10:00', '10:00-11:00', '11:00-12:00', '12:00-1:00', '2:00-3:00', '3:00-4:00'];
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  
+  // Save timetable to localStorage
+  const saveClassesPerDay = () => {
+    localStorage.setItem('classesPerDay', JSON.stringify(classesPerDay));
+  };
+  
+  // Calculate remaining classes from timetable
+  const calculateRemainingClasses = () => {
+    return Object.values(classesPerDay).reduce((sum, count) => sum + parseInt(count || 0), 0);
+  };
+  
+  // Handle bunk calculator
+  const calculateBunkProjection = () => {
+    const remainingClasses = calculateRemainingClasses();
+    
+    if (bunkClasses > remainingClasses) {
+      setProjectedAttendance({ error: "Cannot bunk more than remaining classes!" });
+      return;
+    }
+    
+    const newAttended = student.attended + (remainingClasses - bunkClasses);
+    const newTotal = student.total + remainingClasses;
+    const newPercentage = ((newAttended / newTotal) * 100).toFixed(2);
+    
+    setProjectedAttendance({
+      percentage: newPercentage,
+      attended: newAttended,
+      total: newTotal
+    });
+  };
+  
+  useEffect(() => {
+    if (bunkClasses > 0) {
+      calculateBunkProjection();
+    } else {
+      setProjectedAttendance(null);
+    }
+  }, [bunkClasses]);
 
   const getSubjectStatus = (percentage, subjectTarget) => {
     if (percentage >= subjectTarget) return 'success';
@@ -140,44 +192,6 @@ const Dashboard = () => {
     return student.holidays.includes(dateStr);
   };
 
-  const handleTimetableChange = (dayIndex, slotIndex, value) => {
-    const newTimetable = [...timetable];
-    newTimetable[dayIndex][slotIndex] = value;
-    setTimetable(newTimetable);
-  };
-
-  const saveTimetable = () => {
-    setHasSetTimetable(true);
-    setShowTimetable(false);
-    console.log('Timetable saved:', timetable);
-  };
-
-  const getSubjectWiseBunks = () => {
-    if (!hasSetTimetable) return {};
-    
-    const subjectCounts = {};
-    const subjectBunks = {};
-    
-    // Count total classes per subject from timetable
-    timetable.forEach(day => {
-      day.forEach(slot => {
-        if (slot.trim() && !slot.toLowerCase().includes('mtp') && !slot.toLowerCase().includes('sport') && !slot.toLowerCase().includes('library')) {
-          subjectCounts[slot] = (subjectCounts[slot] || 0) + 1;
-        }
-      });
-    });
-    
-    // Calculate safe bunks per subject using individual targets
-    Object.keys(subjectCounts).forEach(subject => {
-      const totalClasses = subjectCounts[subject] * 4; // Assuming 4 weeks per month
-      const subjectTarget = subjectTargets[subject] || targetPercentage;
-      const requiredClasses = Math.ceil((totalClasses * subjectTarget) / 100);
-      const attendedClasses = Math.floor(totalClasses * 0.8); // Assuming 80% current attendance
-      subjectBunks[subject] = Math.max(0, totalClasses - requiredClasses);
-    });
-    
-    return subjectBunks;
-  };
 
   return (
     <div className="min-h-screen relative p-4 md:p-8">
@@ -417,175 +431,205 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Holiday Management & Timetable */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Holiday Management */}
-          <div className="glass-card hover-lift">
-            <h3 className="text-xl font-bold neon-text mb-4">🗓️ Holiday Management</h3>
-            <div className="flex flex-wrap gap-4">
-              <Popover open={showAddHoliday} onOpenChange={setShowAddHoliday}>
-                <PopoverTrigger asChild>
-                  <Button variant="glass" className="flex items-center gap-2">
-                    <Plus className="h-4 w-4" />
-                    Add Holiday
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <CalendarComponent
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={(date) => {
-                      setSelectedDate(date);
-                      handleAddHoliday(date);
-                    }}
-                    initialFocus
-                    className="rounded-md border glass-card"
-                    modifiers={{
-                      holiday: (date) => isHoliday(date)
-                    }}
-                    modifiersStyles={{
-                      holiday: { backgroundColor: 'hsl(var(--destructive))', color: 'white', borderRadius: '4px' }
-                    }}
-                  />
-                </PopoverContent>
-              </Popover>
+        {/* Holiday Management */}
+        <div className="glass-card hover-lift mb-8">
+          <h3 className="text-xl font-bold neon-text mb-4">🗓️ Holiday Management</h3>
+          <div className="flex flex-wrap gap-4">
+            <Popover open={showAddHoliday} onOpenChange={setShowAddHoliday}>
+              <PopoverTrigger asChild>
+                <Button variant="glass" className="flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  Add Holiday
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <CalendarComponent
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(date) => {
+                    setSelectedDate(date);
+                    handleAddHoliday(date);
+                  }}
+                  initialFocus
+                  className="rounded-md border glass-card"
+                  modifiers={{
+                    holiday: (date) => isHoliday(date)
+                  }}
+                  modifiersStyles={{
+                    holiday: { backgroundColor: 'hsl(var(--destructive))', color: 'white', borderRadius: '4px' }
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
 
-              <Popover open={showRemoveHoliday} onOpenChange={setShowRemoveHoliday}>
-                <PopoverTrigger asChild>
-                  <Button variant="ghost" className="flex items-center gap-2">
-                    <Minus className="h-4 w-4" />
-                    Remove Holiday
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <CalendarComponent
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={(date) => {
-                      setSelectedDate(date);
-                      handleRemoveHoliday(date);
-                    }}
-                    initialFocus
-                    className="rounded-md border glass-card"
-                    modifiers={{
-                      holiday: (date) => isHoliday(date)
-                    }}
-                    modifiersStyles={{
-                      holiday: { backgroundColor: 'hsl(var(--destructive))', color: 'white', borderRadius: '4px' }
-                    }}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            
-            <div className="mt-4 p-3 bg-accent/10 rounded-lg">
-              <p className="text-sm text-muted-foreground">
-                📅 Current holidays: {student.holidays.length} days marked
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Default: Every 2nd and 4th Saturday are holidays
-              </p>
-            </div>
+            <Popover open={showRemoveHoliday} onOpenChange={setShowRemoveHoliday}>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" className="flex items-center gap-2">
+                  <Minus className="h-4 w-4" />
+                  Remove Holiday
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <CalendarComponent
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(date) => {
+                    setSelectedDate(date);
+                    handleRemoveHoliday(date);
+                  }}
+                  initialFocus
+                  className="rounded-md border glass-card"
+                  modifiers={{
+                    holiday: (date) => isHoliday(date)
+                  }}
+                  modifiersStyles={{
+                    holiday: { backgroundColor: 'hsl(var(--destructive))', color: 'white', borderRadius: '4px' }
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
           </div>
-
-          {/* Timetable Management */}
-          <div className="glass-card hover-lift">
-            <h3 className="text-xl font-bold neon-text mb-4">📚 Timetable Setup</h3>
-            <div className="space-y-4">
-              <Dialog open={showTimetable} onOpenChange={setShowTimetable}>
-                <DialogTrigger asChild>
-                  <Button variant="glass" className="flex items-center gap-2">
-                    <BookOpen className="h-4 w-4" />
-                    {hasSetTimetable ? 'Edit Timetable' : 'Add Timetable'}
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-4xl glass-card">
-                  <DialogHeader>
-                    <DialogTitle className="neon-text">📅 Weekly Timetable</DialogTitle>
-                  </DialogHeader>
-                  
-                  <Alert className="mb-4">
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertDescription>
-                      <strong>Note:</strong> Do not include leisure periods like MTP, Sports, Library, etc.
-                    </AlertDescription>
-                  </Alert>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr>
-                          <th className="border border-border/20 p-2 text-sm font-bold bg-accent/10">Time</th>
-                          {days.map((day) => (
-                            <th key={day} className="border border-border/20 p-2 text-sm font-bold bg-accent/10">
-                              {day}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {timeSlots.map((slot, slotIndex) => (
-                          <tr key={slot}>
-                            <td className="border border-border/20 p-2 text-xs font-medium bg-muted/5">
-                              {slot}
-                            </td>
-                            {days.map((_, dayIndex) => (
-                              <td key={dayIndex} className="border border-border/20 p-1">
-                                <Input
-                                  value={timetable[dayIndex][slotIndex]}
-                                  onChange={(e) => handleTimetableChange(dayIndex, slotIndex, e.target.value)}
-                                  placeholder="Subject"
-                                  className="h-8 text-xs border-0 bg-background/50"
-                                />
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="flex justify-end gap-2 mt-4">
-                    <Button variant="ghost" onClick={() => setShowTimetable(false)}>
-                      Cancel
-                    </Button>
-                    <Button onClick={saveTimetable} className="neon-glow">
-                      Save Timetable
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-
-              <p className="text-sm text-muted-foreground">
-                {hasSetTimetable ? (
-                  <span className="text-success">✅ Timetable set! Subject-wise calculations available.</span>
-                ) : (
-                  'Set up your weekly timetable to calculate subject-wise attendance.'
-                )}
-              </p>
-            </div>
+          
+          <div className="mt-4 p-3 bg-accent/10 rounded-lg">
+            <p className="text-sm text-muted-foreground">
+              📅 Current holidays: {student.holidays.length} days marked
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Default: Every 2nd and 4th Saturday are holidays
+            </p>
           </div>
         </div>
 
-        {/* Subject-wise Bunk Calculator */}
-        {hasSetTimetable && (
-          <div className="glass-card hover-lift mb-8">
-            <h3 className="text-xl font-bold neon-text mb-4">🎯 Subject-wise Bunk Calculator</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Object.entries(getSubjectWiseBunks()).map(([subject, bunks]) => (
-                <div key={subject} className="p-4 bg-gradient-to-br from-accent/10 to-primary/5 rounded-lg border border-border/20">
-                  <h4 className="font-bold text-primary mb-2">{subject}</h4>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold neon-text">
-                      {bunks}
-                    </div>
-                    <p className="text-xs text-muted-foreground">Safe bunks</p>
-                  </div>
-                </div>
-              ))}
+        {/* First-Time Timetable Setup */}
+        <div className="glass-card hover-lift mb-8">
+          <div className="flex items-center gap-3 mb-4">
+            <BookOpen className="h-6 w-6 text-accent" />
+            <h3 className="text-xl font-bold neon-text">📚 Weekly Class Schedule</h3>
+          </div>
+          
+          <Alert className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              Enter the number of classes you have on each weekday. This data will be used for attendance calculations.
+            </AlertDescription>
+          </Alert>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+            {days.map((day) => (
+              <div key={day} className="space-y-2">
+                <label className="text-sm font-medium text-foreground">{day}</label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="10"
+                  value={classesPerDay[day]}
+                  onChange={(e) => setClassesPerDay({
+                    ...classesPerDay,
+                    [day]: parseInt(e.target.value) || 0
+                  })}
+                  placeholder="0"
+                  className="h-12"
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-primary/5 rounded-lg border border-primary/20 mb-4">
+            <div>
+              <p className="text-sm font-medium text-foreground">Total Classes per Week</p>
+              <p className="text-xs text-muted-foreground">Sum of all weekdays</p>
+            </div>
+            <div className="text-3xl font-bold text-primary neon-text">
+              {calculateRemainingClasses()}
             </div>
           </div>
-        )}
+
+          <Button 
+            onClick={saveClassesPerDay} 
+            variant="neon" 
+            className="w-full md:w-auto flex items-center gap-2"
+          >
+            <Save className="h-4 w-4" />
+            Save Class Schedule
+          </Button>
+        </div>
+
+        {/* Attendance If I Bunk X Classes */}
+        <div className="glass-card hover-lift mb-8">
+          <div className="flex items-center gap-3 mb-4">
+            <Calculator className="h-6 w-6 text-warning" />
+            <h3 className="text-xl font-bold neon-text">🔮 Bunk Impact Calculator</h3>
+          </div>
+
+          <p className="text-sm text-muted-foreground mb-4">
+            Check what your attendance will be if you bunk a certain number of classes
+          </p>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">
+                Number of classes to bunk
+              </label>
+              <Input
+                type="number"
+                min="0"
+                max={calculateRemainingClasses()}
+                value={bunkClasses}
+                onChange={(e) => setBunkClasses(parseInt(e.target.value) || 0)}
+                placeholder="Enter number of classes"
+                className="h-12"
+              />
+            </div>
+
+            {projectedAttendance && (
+              <Card className={`border-2 ${projectedAttendance.error ? 'border-destructive' : 'border-primary'}`}>
+                <CardHeader>
+                  <CardTitle className={projectedAttendance.error ? 'text-destructive' : 'text-primary'}>
+                    {projectedAttendance.error ? '⚠️ Error' : '📊 Projected Attendance'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {projectedAttendance.error ? (
+                    <p className="text-destructive font-medium">{projectedAttendance.error}</p>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="text-center">
+                        <div className={`text-5xl font-bold neon-text ${
+                          projectedAttendance.percentage >= targetPercentage ? 'text-success' : 'text-destructive'
+                        }`}>
+                          {projectedAttendance.percentage}%
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-2">
+                          Your attendance will be
+                        </p>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border">
+                        <div className="text-center">
+                          <p className="text-xs text-muted-foreground">Attended</p>
+                          <p className="text-lg font-bold text-foreground">{projectedAttendance.attended}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-muted-foreground">Total</p>
+                          <p className="text-lg font-bold text-foreground">{projectedAttendance.total}</p>
+                        </div>
+                      </div>
+
+                      {projectedAttendance.percentage < targetPercentage && (
+                        <Alert variant="destructive" className="mt-4">
+                          <AlertTriangle className="h-4 w-4" />
+                          <AlertDescription>
+                            Warning: Your attendance will fall below the {targetPercentage}% target!
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
 
         {/* Motivational Quote */}
         <div className="glass-card text-center hover-lift">
