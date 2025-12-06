@@ -629,6 +629,7 @@ const Dashboard = () => {
                 max={calculateRemainingClasses()}
                 value={bunkClasses}
                 onChange={(e) => setBunkClasses(parseInt(e.target.value) || 0)}
+                onFocus={(e) => e.target.select()}
                 placeholder="Enter number of classes"
                 className="h-12"
               />
